@@ -164,21 +164,24 @@ class PayfastCommon
      */
     public function pflog(string $msg = '', bool $close = false): void
     {
-        static $fh = 0;
+        static $fh = null;
 
         // Only log if debugging is enabled
         if ($this->debugMode) {
             if ($close) {
-                fclose($fh);
+                if ($fh && is_resource($fh)) {
+                    fclose($fh);
+                }
+                $fh = null;
             } else {
-                // If file doesn't exist, create it
-                if (!$fh) {
+                // If file doesn't exist or is not a valid resource, create it
+                if (!$fh || !is_resource($fh)) {
                     $pathInfo = pathinfo(__FILE__);
                     $fh       = fopen($pathInfo['dirname'] . '/payfast.log', 'a+');
                 }
 
                 // If file was successfully created
-                if ($fh) {
+                if ($fh && is_resource($fh)) {
                     $line = date('Y-m-d H:i:s') . ' : ' . $msg . "\n";
 
                     try {
