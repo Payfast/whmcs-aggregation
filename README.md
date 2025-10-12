@@ -9,10 +9,8 @@ to [contact the Payfast support team](https://payfast.io/contact/) should you re
 
 1. Unzip the module to a temporary location on your computer.
 2. Copy the “modules” folder from the archive to your base “whmcs” folder (using FTP program or similar)
-
 - This should NOT overwrite any existing files or folders and merely supplement them with the Payfast Aggregation files.
 - This is however, dependent on the FTP program you use.
-
 3. Login to the WHMCS Administrator console.
 4. Using the main menu, navigate to Setup -> Apps & Integrations and search for "Payfast Aggregation".
 5. Click “Payfast Aggregation” from the search results list, and then click “Activate”
