@@ -50,7 +50,7 @@ In order to make the module “LIVE”, follow the instructions below:
 3. Under the “Payfast” heading, uncheck the “Test Mode” item
 4. Click “Save Changes”
 
-Please [click here](https://payfast.io/integration/shopping-carts/whmcs/) more information concerning this module.
+Please [click here](https://payfast.io/integration/plugins/whmcs/) more information concerning this module.
 
 ## Collaboration
 
