@@ -1,16 +1,8 @@
 <?php
 
-/**
- * Copyright (c) 2024 PayFast (Pty) Ltd
- * You (being anyone who is not PayFast (Pty) Ltd) may download and use this plugin / code in your own website in
- * conjunction with a registered and active Payfast account. If your Payfast account is terminated for any reason,
- * you may not use this plugin / code or part thereof. Except as expressly indicated in this licence, you may not use,
- * copy, modify or distribute this plugin / code or part thereof in any way.
- */
+namespace Payfast\PayfastCommon\Aggregator\Request;
 
-namespace Payfast\PayfastCommon;
-
-class PayfastCommon
+class PaymentRequest
 {
     // General Defines
     public const PF_TIMEOUT = 15;
@@ -38,8 +30,8 @@ class PayfastCommon
     public const PF_MSG_OK      = 'Payment was successful';
     public const PF_MSG_FAILED  = 'Payment has failed';
     public const PF_MSG_PENDING = 'The payment is pending. Please note, you will receive another Instant' .
-                                  ' Transaction Notification when the payment status changes to' .
-                                  ' "Completed", or "Failed"';
+    ' Transaction Notification when the payment status changes to' .
+    ' "Completed", or "Failed"';
     private bool $debugMode;
 
     /**
@@ -63,7 +55,7 @@ class PayfastCommon
         array $moduleInfo,
         string $pfHost = 'www.payfast.co.za',
         string $pfParamString = ''
-    ): bool {
+    ): bool{
         $pfFeatures = 'PHP ' . phpversion() . ';';
         $pfCurl     = false;
 
@@ -77,9 +69,9 @@ class PayfastCommon
         }
 
         $pfUserAgent = $moduleInfo["pfSoftwareName"] . '/' . $moduleInfo['pfSoftwareVer'] .
-                       ' (' . trim(
-                           $pfFeatures
-                       ) . ') ' . $moduleInfo["pfSoftwareModuleName"] . '/' . $moduleInfo["pfModuleVer"];
+            ' (' . trim(
+                $pfFeatures
+            ) . ') ' . $moduleInfo["pfSoftwareModuleName"] . '/' . $moduleInfo["pfModuleVer"];
 
         $this->pflog('Host = ' . $pfHost);
         $this->pflog('Params = ' . $pfParamString);
@@ -164,21 +156,30 @@ class PayfastCommon
      */
     public function pflog(string $msg = '', bool $close = false): void
     {
-        static $fh = 0;
+        static $fh = null;
 
         // Only log if debugging is enabled
         if ($this->debugMode) {
             if ($close) {
-                fclose($fh);
+                if ($fh && is_resource($fh)) {
+                    fclose($fh);
+                }
+                $fh = null;
             } else {
-                // If file doesn't exist, create it
-                if (!$fh) {
+                // If file doesn't exist or is not a valid resource, create it
+                if (!$fh || !is_resource($fh)) {
                     $pathInfo = pathinfo(__FILE__);
                     $fh       = fopen($pathInfo['dirname'] . '/payfast.log', 'a+');
                 }
 
+                // After attempting to open the file
+                if ($fh === false) {
+                    error_log('Failed to open payfast.log for writing');
+                    return;
+                }
+
                 // If file was successfully created
-                if ($fh) {
+                if ($fh && is_resource($fh)) {
                     $line = date('Y-m-d H:i:s') . ' : ' . $msg . "\n";
 
                     try {
@@ -334,17 +335,19 @@ class PayfastCommon
      * @param array $data
      * @param $passphrase
      * @param bool $testMode
+     * @param bool $returnCurlRequest
      *
      * @return string
      */
-    public static function subscriptionAction(
+    public function subscriptionAction(
         $merchantID,
         $token,
         $action,
         array $data = [],
         $passphrase = null,
-        bool $testMode = false
-    ): string {
+        bool $testMode = false,
+        bool $returnCurlRequest = false
+    ): string{
         $url = "https://api.payfast.co.za/subscriptions/$token/$action";
 
         if ($testMode) {
@@ -359,7 +362,7 @@ class PayfastCommon
             default => null,
         };
 
-        return self::placeRequest($url, $merchantID, $passphrase, $data, $method);
+        return $this->placeRequest($url, $merchantID, $passphrase, $data, $method, $returnCurlRequest);
     }
 
     /**
@@ -370,11 +373,20 @@ class PayfastCommon
      * @param $paymentID
      * @param $action
      * @param array $data
+     * @param bool $testMode
+     * @param bool $returnCurlRequest
      *
      * @return string
      */
-    public static function refundAction($merchantID, $passphrase, $paymentID, $action, array $data = []): string
-    {
+    public function refundAction(
+        $merchantID,
+        $passphrase,
+        $paymentID,
+        $action,
+        array $data = [],
+        bool $testMode = false,
+        bool $returnCurlRequest = false
+    ): string{
         $url    = "https://api.payfast.co.za/refunds/";
         $method = "GET";
 
@@ -384,9 +396,9 @@ class PayfastCommon
             $method = "POST";
         }
 
-        $url .= "$paymentID?testing=true";
+        $url .= $testMode ? "$paymentID?testing=true" : "$paymentID";
 
-        return self::placeRequest($url, $merchantID, $passphrase, $data, $method);
+        return $this->placeRequest($url, $merchantID, $passphrase, $data, $method, $returnCurlRequest);
     }
 
     /**
@@ -397,11 +409,11 @@ class PayfastCommon
      *
      * @return string
      */
-    public static function pingPayfast($merchantID, $passphrase = null): string
+    public function pingPayfast($merchantID, $passphrase = null): string
     {
         $url = "https://api.payfast.co.za/ping?testing=true";
 
-        return self::placeRequest($url, $merchantID, $passphrase);
+        return $this->placeRequest($url, $merchantID, $passphrase);
     }
 
     /**
@@ -412,19 +424,31 @@ class PayfastCommon
      * @param null $passphrase
      * @param array $body
      * @param null $method
+     * @param bool $returnCurlRequest
      *
      * @return string
      */
-    public static function placeRequest($url, $merchantID, $passphrase = null, array $body = [], $method = null): string
-    {
+    public function placeRequest(
+        $url,
+        $merchantID,
+        $passphrase = null,
+        array $body = [],
+        $method = null,
+        bool $returnCurlRequest = false
+    ): string{
         $date      = date("Y-m-d");
         $time      = date("H:i:s");
-        $timeStamp = $date . "T" . $time;
+        $timeStamp = $body['timestamp'] ?? $date . "T" . $time;
+        $version   = $body['version'] ?? "v1";
         $pfData    = [
             "merchant-id" => $merchantID,
             "timestamp"   => $timeStamp,
-            "version"     => "v1",
+            "version"     => $version,
         ];
+
+        if (array_key_exists('action', $body)) {
+            $body = [];
+        }
 
         $pfData = array_merge($pfData, $body);
 
@@ -432,17 +456,17 @@ class PayfastCommon
 
         $headers = [
             "merchant-id: $merchantID",
-            "version: v1",
+            "version: $version",
             "timestamp: $timeStamp",
             "signature: $signature",
         ];
 
         $ch         = curl_init();
-        $curlConfig = array(
+        $curlConfig = [
             CURLOPT_URL            => $url,
             CURLOPT_HTTPHEADER     => $headers,
             CURLOPT_RETURNTRANSFER => true,
-        );
+        ];
 
         if (!empty($body)) {
             $curlConfig[CURLOPT_POST]       = 1;
@@ -451,6 +475,10 @@ class PayfastCommon
 
         if ($method === "PUT" || $method === "PATCH") {
             $curlConfig[CURLOPT_CUSTOMREQUEST] = $method;
+            if (empty($body)) {
+                $headers[]                      = "Content-Length: 0";
+                $curlConfig[CURLOPT_HTTPHEADER] = $headers;
+            }
         }
 
         curl_setopt_array($ch, $curlConfig);
@@ -458,6 +486,32 @@ class PayfastCommon
 
         if (curl_errno($ch)) {
             return curl_error($ch);
+        }
+
+        if ($returnCurlRequest) {
+            // Determine the HTTP method for the bash command and cURL request
+            if ($method === "PUT" || $method === "PATCH") {
+                $bashMethod = $method;
+            } elseif (!empty($body)) {
+                $bashMethod = "POST";
+            } else {
+                $bashMethod = "GET";
+            }
+
+            // Build the bash curl command
+            $bashCommand = "curl -X " . escapeshellarg($bashMethod);
+            foreach ($headers as $header) {
+                $bashCommand .= " -H " . escapeshellarg($header);
+            }
+            if (!empty($body) && in_array($bashMethod, ["POST", "PUT", "PATCH"])) {
+                $bashCommand .= " --data " . escapeshellarg(http_build_query($body));
+            }
+            $bashCommand .= " " . escapeshellarg($url);
+
+            $response = json_encode([
+                                        'request'  => $bashCommand,
+                                        'response' => $response,
+                                    ]);
         }
 
         return $response;
@@ -473,7 +527,7 @@ class PayfastCommon
      *
      * @return void
      */
-    public static function createTransaction($payArray, $passphrase = null, bool $testMode = false): void
+    public static function createTransaction($payArray, $passphrase = null, bool $testMode = false, $returnForm = false)
     {
         $url = $testMode ? 'https://sandbox.payfast.co.za/eng/process' : 'https://www.payfast.co.za/eng/process';
 
@@ -496,7 +550,7 @@ class PayfastCommon
             $inputs .= '<input type="hidden" name="' . $k . '" value="' . $v . '"/>';
         }
 
-        echo <<<EOT
+        $form = <<<HTML
     <html lang="en">
     <body onLoad="document.payfast_form.submit();">
         <form action="$url" method="post" name="payfast_form">
@@ -504,6 +558,12 @@ class PayfastCommon
         </form>
     </body>
     </html>
-EOT;
+HTML;
+
+        if ($returnForm) {
+            return $responseData = ['form' => $form, 'secureString' => $secureString, 'securityHash' => $securityHash];
+        } else {
+            echo $form;
+        }
     }
 }

@@ -3,7 +3,7 @@
  *
  * Payfast Callback File
  *
- * Copyright (c) 2024 Payfast (Pty) Ltd
+ * Copyright (c) 2025 Payfast (Pty) Ltd
  * You (being anyone who is not Payfast (Pty) Ltd) may download and use this plugin /
  * code in your own website in conjunction with a registered and active Payfast account.
  * If your Payfast account is terminated for any reason, you may not use this plugin / code or part thereof.
@@ -19,7 +19,7 @@ require_once __DIR__ . '/../../../includes/invoicefunctions.php';
 
 require_once __DIR__ . '/../payfast/vendor/autoload.php';
 
-use Payfast\PayfastCommon\PayfastCommon;
+use Payfast\PayfastCommon\Aggregator\Request\PaymentRequest;
 
 // getCCVariables is required for email to clients within addInvoicePayment call
 if (!function_exists('getCCVariables')) {
@@ -41,18 +41,18 @@ $pfData        = array();
 $pfHost        = (($gatewayParams['test_mode'] == 'on') ? 'sandbox' : 'www') . '.payfast.co.za';
 $pfOrderId     = '';
 $pfParamString = '';
-$moduleInfo = [
-    'pfSoftwareName' => PF_SOFTWARE_NAME,
-    'pfSoftwareVer' => PF_SOFTWARE_VER,
+$moduleInfo    = [
+    'pfSoftwareName'       => PF_SOFTWARE_NAME,
+    'pfSoftwareVer'        => PF_SOFTWARE_VER,
     'pfSoftwareModuleName' => PF_MODULE_NAME,
-    'pfModuleVer' => PF_MODULE_VER,
+    'pfModuleVer'          => PF_MODULE_VER,
 ];
 
-// Instantiate the PayfastCommon class
+// Instantiate the PaymentRequest class
 
-$payfastCommon = new PayfastCommon(true);
+$paymentRequest = new PaymentRequest(true);
 
-$payfastCommon->pflog('Payfast ITN call received');
+$paymentRequest->pflog('Payfast ITN call received');
 
 // Notify Payfast that information has been received
 header('HTTP/1.0 200 OK');
@@ -64,10 +64,10 @@ if (!$gatewayParams['type']) {
 }
 
 // Retrieve data returned in Payfast callback
-$payfastCommon->pflog('Get posted data');
+$paymentRequest->pflog('Get posted data');
 
 // Posted variables from ITN
-$pfData = $payfastCommon->pfGetData();
+$pfData = $paymentRequest->pfGetData();
 
 foreach ($pfData as $key => $value) {
     if (is_string($value)) {
@@ -75,11 +75,11 @@ foreach ($pfData as $key => $value) {
     }
 }
 
-$payfastCommon->pflog('Payfast Data: ' . print_r($pfData, true));
+$paymentRequest->pflog('Payfast Data: ' . print_r($pfData, true));
 
 if ($pfData === false) {
     $pfError  = true;
-    $pfErrMsg = PayfastCommon::PF_ERR_BAD_ACCESS;
+    $pfErrMsg = PaymentRequest::PF_ERR_BAD_ACCESS;
 }
 
 /**
@@ -91,7 +91,7 @@ $invoiceId = substr($pfData['item_name'], strpos($pfData['item_name'], '#') + 1)
 
 // Verify security signature
 if (!$pfError) {
-    $payfastCommon->pflog('Verify security signature');
+    $paymentRequest->pflog('Verify security signature');
 
     $passphrase = null;
 
@@ -104,40 +104,40 @@ if (!$pfError) {
     }
 
     // If signature different, log for debugging
-    if (!$payfastCommon->pfValidSignature($pfData, $pfParamString, $passphrase)) {
+    if (!$paymentRequest->pfValidSignature($pfData, $pfParamString, $passphrase)) {
         $pfError  = true;
-        $pfErrMsg = PayfastCommon::PF_ERR_INVALID_SIGNATURE;
+        $pfErrMsg = PaymentRequest::PF_ERR_INVALID_SIGNATURE;
     }
 }
 
 // Get internal order and verify it hasn't already been processed
 if (!$pfError) {
-    $payfastCommon->pflog("Check order hasn't been processed");
+    $paymentRequest->pflog("Check order hasn't been processed");
     // Checks invoice ID is a valid invoice number or ends processing
     $whInvoiceID = checkCbInvoiceID($invoiceId, $gatewayParams['name']);
 }
 
 // Verify data received
 if (!$pfError) {
-    $payfastCommon->pflog('Verify data received');
+    $paymentRequest->pflog('Verify data received');
 
-    $pfValid = $payfastCommon->pfValidData($moduleInfo, $pfHost, $pfParamString);
+    $pfValid = $paymentRequest->pfValidData($moduleInfo, $pfHost, $pfParamString);
 
     if (!$pfValid) {
         $pfError  = true;
-        $pfErrMsg = PayfastCommon::PF_ERR_BAD_ACCESS;
+        $pfErrMsg = PaymentRequest::PF_ERR_BAD_ACCESS;
     }
 }
 
 $transactionStatus = 'Unsuccessful';
 
 if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
-    $payfastCommon->pflog('Checking order');
+    $paymentRequest->pflog('Checking order');
     $transactionStatus = 'Successful';
 
     // Convert currency if necessary
     if ($gatewayParams['convertto'] != '' && $pfData['custom_str2'] != 'ZAR') {
-        $payfastCommon->pflog('Converting currency');
+        $paymentRequest->pflog('Converting currency');
         $currencies = Illuminate\Database\Capsule\Manager::table('tblcurrencies')
                                                          ->where('code', $pfData['custom_str2'])
                                                          ->get();
@@ -145,10 +145,10 @@ if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
         $amountGross = convertCurrency($pfData['amount_gross'], $gatewayParams['convertto'], $currencies[0]->id);
         $amountFee   = convertCurrency($pfData['amount_fee'], $gatewayParams['convertto'], $currencies[0]->id);
 
-        $payfastCommon->pflog('amountGross: ' . $amountGross);
-        $payfastCommon->pflog('amountFee: ' . $amountFee);
-        $payfastCommon->pflog('convertto: ' . $gatewayParams['convertto']);
-        $payfastCommon->pflog('currency: ' . $currencies[0]->id);
+        $paymentRequest->pflog('amountGross: ' . $amountGross);
+        $paymentRequest->pflog('amountFee: ' . $amountFee);
+        $paymentRequest->pflog('convertto: ' . $gatewayParams['convertto']);
+        $paymentRequest->pflog('currency: ' . $currencies[0]->id);
     } else {
         $amountGross = $pfData['amount_gross'];
         $amountFee   = $pfData['amount_fee'];
@@ -156,29 +156,28 @@ if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
 
     //Check if response is adhoc
     if ($pfData['item_description'] == 'tokenized-adhoc-payment-dc0521d355fe269bfa00b647310d760f') {
-        $payfastCommon->pflog("adhoc payment");
+        $paymentRequest->pflog("adhoc payment");
 
         //Check invoice status
         $invStatus = Illuminate\Database\Capsule\Manager::table('tblinvoices')
                                                         ->where('id', $invoiceId)
                                                         ->value('status');
-        $payfastCommon->pflog("Invoice Status " . $invStatus);
+        $paymentRequest->pflog("Invoice Status " . $invStatus);
 
         //Prevention of race condition
         if ($invStatus != 'Paid') {
-
             $adhocWaitTime = (int)$gatewayParams['adhoc_timer'];
 
-            $payfastCommon->pflog("Waiting " . $adhocWaitTime . " seconds for adhoc response ");
+            $paymentRequest->pflog("Waiting " . $adhocWaitTime . " seconds for adhoc response ");
             sleep($adhocWaitTime);
             $invStatus = Illuminate\Database\Capsule\Manager::table('tblinvoices')
                                                             ->where('id', $invoiceId)
                                                             ->value('status');
-            $payfastCommon->pflog("Invoice Status " . $invStatus);
+            $paymentRequest->pflog("Invoice Status " . $invStatus);
         }
 
         if ($invStatus == 'Paid') {
-            $payfastCommon->pflog("Updating adhoc payment fees");
+            $paymentRequest->pflog("Updating adhoc payment fees");
             Illuminate\Database\Capsule\Manager::table('tblaccounts')
                                                ->where('amountin', $pfData['amount_gross'])
                                                ->where('invoiceid', $invoiceId)
@@ -188,7 +187,7 @@ if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
                                                    ]
                                                );
             // Close log
-            $payfastCommon->pflog('', true);
+            $paymentRequest->pflog('', true);
         }
 
         return;
@@ -228,7 +227,7 @@ if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
         //Backwards compatibility check
         if (preg_match('/PF_WHMCS_(.*?)\.\d_/', $pfData['custom_str1'], $whmcs_ver) == 1
             && (floatval($whmcs_ver[1]) < 7.9)) {
-            $payfastCommon->pflog(
+            $paymentRequest->pflog(
                 "Manually store token in database for backwards compatibility with WHMCS "
                 . $whmcs_ver[1]
             );
@@ -246,7 +245,7 @@ if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
             );
             $token_added = !empty($add_token);
         } else {
-            $payfastCommon->pflog("Store adhoc token as tokenized Payfast Pay Method");
+            $paymentRequest->pflog("Store adhoc token as tokenized Payfast Pay Method");
             //Add token as tokenized Credit Card for Payfast payment method on user profile.
             try {
                 // Function available in WHMCS 7.9 and later
@@ -264,14 +263,14 @@ if ($pfData['payment_status'] == "COMPLETE" && !$pfError) {
                 );
             } catch (Exception $e) {
                 // Log to gateway log as unsuccessful.
-                $payfastCommon->pflog('Add new token failed : ' . $e->getMessage());
+                $paymentRequest->pflog('Add new token failed : ' . $e->getMessage());
                 logTransaction($gatewayParams['paymentmethod'], $_REQUEST, $e->getMessage());
                 // Show failure message.
                 echo 'Add new token failed :' . $e;
             }
         }
 
-        $payfastCommon->pflog("Add new token : " . ($token_added ? 'success' : 'failed'));
+        $paymentRequest->pflog("Add new token : " . ($token_added ? 'success' : 'failed'));
     }
 }
 
@@ -290,8 +289,8 @@ logTransaction($gatewayParams['name'], $_POST, $transactionStatus);
 
 // If an error occurred
 if ($pfError) {
-    $payfastCommon->pflog('Error occurred: ' . $pfErrMsg);
+    $paymentRequest->pflog('Error occurred: ' . $pfErrMsg);
 }
 
 // Close log
-$payfastCommon->pflog('', true);
+$paymentRequest->pflog('', true);

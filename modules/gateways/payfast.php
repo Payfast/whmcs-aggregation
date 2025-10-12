@@ -1,12 +1,13 @@
 <?php
 
 require_once __DIR__ . '/payfast/vendor/autoload.php';
-use Payfast\PayfastCommon\PayfastCommon;
+
+use Payfast\PayfastCommon\Aggregator\Request\PaymentRequest;
 
 /**
  * payfast.php
  *
- * Copyright (c) 2024 Payfast (Pty) Ltd
+ * Copyright (c) 2025 Payfast (Pty) Ltd
  * You (being anyone who is not Payfast (Pty) Ltd) may download and use this plugin /
  * code in your own website in conjunction with a registered and active Payfast account.
  * If your Payfast account is terminated for any reason, you may not use this plugin / code or part thereof.
@@ -39,7 +40,7 @@ function Payfast_MetaData(): array
     define('PF_SOFTWARE_VER', $CONFIG['Version']);
 
     define("PF_MODULE_NAME", 'Payfast-WHMCS');
-    define("PF_MODULE_VER", '2.3.1');
+    define("PF_MODULE_VER", '2.4.0');
 
     return array(
         'DisplayName'                 => 'Payfast',
@@ -119,7 +120,7 @@ function Payfast_config(): array
             'Description'  => 'Check to force all clients to use tokenized billing(adhoc subscriptions).
              This requires "Enable Recurring Billing" to be enabled to take effect.',
         ),
-        'adhoc_timer'  => array(
+        'adhoc_timer'      => array(
             'FriendlyName' => 'ADHOC Payment Wait Time',
             'Type'         => 'dropdown',
             "Options"      => "10,15,20,25,30",
@@ -225,7 +226,7 @@ function pf_create_button(array $pfData, bool $isRecurring, string $url, string 
         $pfHtml .= '<input type="hidden" name="' . $k . '" value="' . $v . '" />';
     }
     $buttonValue = $isRecurring ? 'Subscribe Using Payfast' : 'Pay Using Payfast';
-    $pfHtml  .= '<input type="submit" value="' . $buttonValue . '"/></form>';
+    $pfHtml      .= '<input type="submit" value="' . $buttonValue . '"/></form>';
 
     return $pfHtml;
 }
@@ -308,7 +309,7 @@ function Payfast_link(array $params): string
     );
 
     //Create Payfast button/s on Invoice
-    $htmlOutput   = '';
+    $htmlOutput  = '';
     $isRecurring = false;
 
     if ($enableRecurring && empty($pfToken)) {
@@ -346,15 +347,15 @@ function Payfast_capture(array $params): array
     App::load_function('gateway');
     // Detect module name from filename.
 
-    // Instantiate the PayfastCommon class
-    $payfastCommon = new PayfastCommon(true);
+    // Instantiate the PaymentRequest class
+    $paymentRequest = new PaymentRequest(true);
 
     // Fetch gateway configuration parameters.
     $gatewayParams = getGatewayVariables('payfast');
 
     define('PF_DEBUG', $gatewayParams['debug'] == 'on');
 
-    $payfastCommon->pflog('Payfast capture called');
+    $paymentRequest->pflog('Payfast capture called');
 
     // Payfast Configuration Parameters
     $merchantId = $params['merchant_id'];
@@ -373,7 +374,7 @@ function Payfast_capture(array $params): array
     if ($testMode == 'on') {
         $url = $url . '?testing=true';
         //Log testing true
-        $payfastCommon->pflog("url: ?testing=true");
+        $paymentRequest->pflog("url: ?testing=true");
 
         //Use default sandbox credentials if no merchant id set
         if (empty($params['merchant_id'])) {
@@ -402,10 +403,10 @@ function Payfast_capture(array $params): array
     $signature = md5(http_build_query($orderedPrehash));
 
     //log Post data
-    $payfastCommon->pflog('version: ' . $hashArray['version']);
-    $payfastCommon->pflog('merchant-id: ' . $hashArray['merchant-id']);
-    $payfastCommon->pflog('signature: ' . $signature);
-    $payfastCommon->pflog('timestamp: ' . $hashArray['timestamp']);
+    $paymentRequest->pflog('version: ' . $hashArray['version']);
+    $paymentRequest->pflog('merchant-id: ' . $hashArray['merchant-id']);
+    $paymentRequest->pflog('signature: ' . $signature);
+    $paymentRequest->pflog('timestamp: ' . $hashArray['timestamp']);
 
     // configure curl
     $ch = curl_init($url);
@@ -425,14 +426,14 @@ function Payfast_capture(array $params): array
 
     $response = curl_exec($ch);
     //Log API response
-    $payfastCommon->pflog('response :' . $response);
+    $paymentRequest->pflog('response :' . $response);
 
     curl_close($ch);
 
     $pfResponse = json_decode($response);
 
     // Close log
-    $payfastCommon->pflog('', true);
+    $paymentRequest->pflog('', true);
 
     return array(
         // 'success' if successful, otherwise 'declined', 'error' for failure

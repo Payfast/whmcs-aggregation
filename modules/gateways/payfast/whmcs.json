@@ -5,7 +5,7 @@
   "license": "proprietary",
   "category": "payments",
   "description": {
-    "name": "Payfast",
+    "name": "Payfast Aggregation",
     "tagline": "South Africa’s leading payment gateway.",
     "long": "Experience fast and secure online payments with South Africa’s leading payment gateway.\n\nPayfast is a leading online payment processing solution for individuals, non-profit organisations (NPOs) and businesses of all sizes in South Africa. The Payfast integration with WHMCS enables your customers to settle invoices immediately and conveniently using one of Payfast’s supported payment options.",
     "features": [
