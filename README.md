@@ -1,6 +1,6 @@
 # whmcs-aggregation
 
-## Payfast Aggregation module for WHMCS v8.13
+## Payfast Aggregation module v2.4.1 for WHMCS v8.13
 
 This is the Payfast Aggregation module for WHMCS. Please feel free
 to [contact the Payfast support team](https://payfast.io/contact/) should you require any assistance.
